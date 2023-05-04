@@ -217,8 +217,10 @@ if __name__ == '__main__':
 
     binary = model.apply_threhold(hrea)
 
-    plot_neigh_bars(array=binary, n=9)
+    #plot_neigh_bars(array=binary, n=9)
     #plot_semivariogran(array=binary)
+    model.compute_temp_autocorr(array=hrea)
+
     exit()
 
 

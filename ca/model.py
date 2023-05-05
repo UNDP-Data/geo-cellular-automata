@@ -121,34 +121,37 @@ def compute_delta(array=None):
         a[n] = array[sy]-array[ey]
     return a
 
-def compute_on_stats(array=None, y0=None, y1=None, n=33):
-    t0 = array[y0]
-    t1 = array[y1]
+
+
+def compute_on_stats(binary_array=None, y0=None, y1=None, n=None):
+    t0 = binary_array[y0]
+    t1 = binary_array[y1]
     offset = n//2
-    nl, nc = array.shape
+    nl, nc = binary_array.shape
     ysize= nl-2*offset
     xsize = nc-2*offset
     t0_win = np.lib.stride_tricks.sliding_window_view(t0,window_shape=(ysize, xsize))
     t1_win = np.lib.stride_tricks.sliding_window_view(t1,window_shape=(ysize, xsize))
-
+    t01_win = np.lib.stride_tricks.sliding_window_view(np.where(t0==1, 1, 0),window_shape=(ysize, xsize))
     t0_center = t0_win[offset,offset,...].ravel()
     t1_center = t1_win[offset,offset,...].ravel()
     t1_el_ind = np.argwhere(t1_center == 1).ravel()
     t0_noel_ind = np.argwhere(t0_center == 0).ravel()
     on_indices = np.intersect1d(t0_noel_ind, t1_el_ind)
-    l = []
-    for i in range(n):
-        for j in range(n):
-            arr = t0_win[i, j,...]
-            l.append((arr.flat[on_indices] == 1).view('u1'))
-    m = np.dstack(l).squeeze()
-    mm = m.sum(axis=1)
-    uv, counts = np.unique(mm, return_counts=True)
+
+
+    a = t01_win.sum(axis=0).sum(axis=0)
+    b = a.flat[on_indices]
+
+    uv, counts = np.unique(b, return_counts=True)
+
     percs = counts/sum(counts) *100
-    percs_str = [f'{e:.2f}%' for e in percs]
-    nn_dict = dict(zip(uv, percs_str))
+
+    # percs_str = [f'{e:.2f}%' for e in percs]
+    # nn_dict = dict(zip(uv, percs_str))
+    #print(f'cells (0->1) from {y0}->{y1} {nn_dictm} :: {sum(countsm) } (total)')
     return uv, percs, counts
-    #print(f'cells (0->1) from {y0}->{y1} {nn_dict} :: {sum(counts) } (total)')
+
 
 def compute_yearly_on_stats(array=None, y0=None, y1=None, n=3):
     t0 = array[y0]

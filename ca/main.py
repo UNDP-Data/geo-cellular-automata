@@ -4,10 +4,11 @@ import os
 import pandas
 from scipy.spatial.distance import cdist
 import numpy as np
-
-from ca import io, model, S_A
-from matplotlib import pyplot as plt
+import matplotlib
+from ca import io, model
+from matplotlib import pyplot as plt, cm
 from matplotlib import gridspec
+from matplotlib.colors import ListedColormap
 
 
 def display(data=dict(), interpolation='nearest', title='', cmap='gist_rainbow'):
@@ -49,6 +50,12 @@ def display_rarray(data=None, ncols=3,  interpolation='nearest', title='', mask_
         a
 
     """
+
+
+
+
+
+
     fig = plt.figure()
     #ncols = 2 # we want two columns
     nrows = int((len(data.dtype.names) / 2) + 1)
@@ -86,6 +93,106 @@ def display_rarray(data=None, ncols=3,  interpolation='nearest', title='', mask_
     fig.suptitle(title)
     plt.show()
 
+
+
+
+def ploti(rec_array=None, interpolation='nearest', title='', mask_val=None, cmap='gist_rainbow'):
+
+    from matplotlib.widgets import Button
+    dt = rec_array.dtype[0]
+    print(rec_array.dtype)
+
+    names = rec_array.dtype.names
+
+    #convert struct array to regular
+    data = rec_array.view((dt, len(rec_array.dtype)))
+
+    current_index = 0
+
+
+    # Create a figure and axis
+    fig, ax = plt.subplots()
+
+    # Plot the first time step
+    arr = rec_array[names[current_index]]
+    col_dict={-1:"white",
+              0:"black",
+              1:"orange"
+              }
+
+    # We create a colormar from our list of colors
+    cmp = ListedColormap([col_dict[x] for x in col_dict.keys()])
+    #cmp = cm.get_cmap(cmap, 3)
+
+
+
+    im = ax.imshow(arr, cmap=cmp, interpolation=interpolation)
+
+
+    # # Create previous and next buttons
+    # button_previous = Button(ax, 'Previous')
+    # button_next = Button(ax, 'Next')
+
+    class Index:
+
+        def __init__(self, index=None, mask_val=None):
+            self.current_index = index
+            self.mask_val = mask_val
+        # Define functions to update the plot when the buttons are clicked
+        def update_previous(self, event):
+
+            if self.current_index > 1:
+                self.current_index -= 1
+
+                arr = rec_array[names[self.current_index]]
+                im.set_array(arr)
+                im.set_data(arr)
+                im.set_clim(vmin=arr.min(), vmax=arr.max())
+                im.autoscale()
+                im.set_array(im.get_array())
+                fig.suptitle(f'{names[self.current_index]}')
+                fig.canvas.draw_idle()
+
+        def update_next(self, event):
+
+
+            if self.current_index < data.shape[2]-1:
+                self.current_index +=1
+
+                arr = rec_array[names[self.current_index]]
+                im.set_array(arr)
+                im.set_data(arr)
+                im.set_clim(vmin=arr.min(), vmax=arr.max())
+                im.autoscale()
+                im.set_array(im.get_array())
+                fig.suptitle(f'{names[self.current_index]}')
+                fig.canvas.draw_idle()
+
+
+    # Create two subplots for the buttons
+    fig.subplots_adjust(bottom=0.2)
+    ax_prev = plt.axes([0.45, 0.05, 0.1, 0.075])
+    ax_next = plt.axes([0.55, 0.05, 0.1, 0.075])
+
+    # Add the buttons to the subplots
+    button_previous = Button(ax_prev, 'Previous')
+    button_next = Button(ax_next, 'Next')
+    # Connect the buttons to the update functions
+    callback = Index(index=current_index, mask_val=mask_val)
+    button_previous.on_clicked(callback.update_previous)
+    button_next.on_clicked(callback.update_next)
+
+    fig.suptitle(f'{names[current_index]}')
+    # Show the plot
+
+    plt.show()
+
+
+
+
+
+
+
 def distances(xy1, xy2):
     """
         Computes the pairwise distance between the elements (x,y) coordinates in the arrays
@@ -116,9 +223,9 @@ def plot_semivariogran(array=None):
         print(dist)
 
 
-def plot_neigh_bars(array=None, n=9):
-    y0s = array.dtype.names[:-1]
-    y1s = array.dtype.names[1:]
+def plot_neigh_bars(hrea_array=None, binary_hrea_array=None, n=9):
+    y0s = binary_hrea_array.dtype.names[:-1]
+    y1s = binary_hrea_array.dtype.names[1:]
     years = [f'{k}-{v}' for k, v in dict(zip(y0s, y1s)).items()]
     neighs = range(n)
     nneighs = n
@@ -131,7 +238,8 @@ def plot_neigh_bars(array=None, n=9):
     df = pandas.DataFrame(columns=['nneigh', 'perc', 'years'])
     ci = 0
     for y0, y1 in zip(y0s, y1s):
-        neigh, percs, counts = model.compute_on_stats(array=array, y0=y0, y1=y1, n=9)
+        neigh, percs, counts = model.compute_on_stats(binary_array=binary_hrea_array, y0=y0, y1=y1, n=n)
+
 
         percs5 = percs[:nneighs]
         counts5 = counts[:nneighs]
@@ -216,10 +324,10 @@ if __name__ == '__main__':
         hrea = np.load(hrea_array_path)
 
     binary = model.apply_threhold(hrea)
-
-    #plot_neigh_bars(array=binary, n=9)
+    ploti(rec_array=binary, mask_val=-1, cmap='gray_r')
+    #plot_neigh_bars(hrea_array=hrea, binary_hrea_array=binary, n=9)
     #plot_semivariogran(array=binary)
-    model.compute_temp_autocorr(array=hrea)
+    #model.compute_temp_autocorr(array=hrea)
 
     exit()
 

@@ -1,11 +1,17 @@
+import time
+
+import rasterio.coords
+from skimage import util
 import matplotlib.pyplot as plt
 import numpy as np
 import functools
 import itertools
 import operator
 import pandas as pd
-from scipy.signal import correlate2d, fftconvolve
-
+from scipy.signal import correlate2d, fftconvolve, oaconvolve
+from scipy.ndimage import generic_filter
+from scipy import stats as st
+from affine import  Affine
 def gen_offsets(n=None):
     assert n%2==1, f'n={n} is not odd'
     middle = n//2
@@ -102,7 +108,7 @@ def compute_neighbours_for_array(array=None, n=3):
 
 
 
-def compute_delta(array=None):
+def compute_diff(array=None):
 
     years = array.dtype.names
     delta_dtype = []
@@ -121,7 +127,79 @@ def compute_delta(array=None):
         a[n] = array[sy]-array[ey]
     return a
 
+def aggregate(binary_rec_array=None, block_size=None):
+    years = binary_rec_array.dtype.names
 
+    ndtype = [(e, 'u1') for e in years]
+
+    nl, nc = binary_rec_array.shape
+    lmod = nl%block_size
+    cmod = nc%block_size
+    data = np.empty(shape=(nl//block_size, nc//block_size), dtype=ndtype)
+
+    for year in years:
+        ydata = binary_rec_array[year][0:nl-lmod, 0:nc-cmod]
+        bw = util.view_as_blocks(arr_in=np.where(ydata==1,1,0),block_shape=(block_size,block_size))
+        #bw = util.view_as_blocks(arr_in=np.where(ydata==-1,0,ydata),block_shape=(block_size,block_size))
+        #data[year] = np.where(bw.sum(axis=-1).sum(axis=-1)>=1,1,0)
+        data[year] = bw.sum(axis=-1).sum(axis=-1)
+    return data
+
+def get_tranform_and_bounds(profile=None, array_shape=None ):
+    src_transform = profile['transform']
+    nl, nc = profile['height'], profile['width']
+    yblock_size = nl // array_shape[0]
+    xblock_size = nc // array_shape[1]
+
+    tlx, xres, xrot, tly, yrot, yres  = src_transform.to_gdal()
+    new_xres = xblock_size*xres
+    new_yres = yblock_size*yres
+    new_gt = tlx, new_xres, xrot, tly, yrot, new_yres
+    new_transform = Affine.from_gdal(*new_gt)
+    left, top = new_transform * [0,0]
+    right, bottom = new_transform * array_shape[::-1]
+    new_bounds = profile['bounds'].__class__(left, bottom, right, top)
+    return new_transform, new_bounds
+
+
+def compute_on_bsum(binary_rec_array=None,n=None):
+    years = binary_rec_array.dtype.names
+    year_pairs = dict(zip(years[1:], years[:-1]))
+    dtype = binary_rec_array.dtype
+    ndtype = [(e, 'i2') for e in years[1:]]
+    data = np.empty(shape=binary_rec_array.shape, dtype=ndtype)
+    offset = n//2
+    nl, nc = binary_rec_array.shape
+
+    lmod = nl%n
+    cmod = nc%n
+    for y0, y1 in year_pairs.items():
+        t0 = binary_rec_array[y0][0:nl-lmod, 0:nc-cmod]
+
+        bw = util.view_as_blocks(arr_in=t0,block_shape=(n,n))
+        print(bw.shape)
+        exit()
+        t1 = binary_rec_array[y1]
+        t0_win = np.lib.stride_tricks.sliding_window_view(t0,window_shape=(n, n))
+        t1_win = np.lib.stride_tricks.sliding_window_view(t1,window_shape=(n, n))
+
+        #t01_win = np.lib.stride_tricks.sliding_window_view(np.where(t0==1, 1, 0),window_shape=(ysize, xsize))
+        t0_center = t0_win[...,offset,offset].ravel()
+        t1_center = t1_win[...,offset,offset].ravel()
+        t1_el_ind = np.argwhere(t1_center == 1).ravel()
+        t0_noel_ind = np.argwhere(t0_center == 0).ravel()
+        on_indices = np.intersect1d(t0_noel_ind, t1_el_ind)
+        fftconvolve(np.where(t1==1, 1, 0), np.ones((n,n), dtype='u1'), mode='same')
+
+
+def compute_bsum(rec_array=None,n=None):
+    dtype = rec_array.dtype
+    ndtype = [(e, 'i2') for e in dtype.names]
+    data = np.empty(shape=rec_array.shape, dtype=ndtype)
+    for name in dtype.names:
+        a = rec_array[name]
+        data[name] = fftconvolve(np.where(np.isnan(a), 0, a), np.ones((n,n), dtype='u1'), mode='same')
+    return data
 
 def compute_on_stats(binary_array=None, y0=None, y1=None, n=None):
     t0 = binary_array[y0]
@@ -176,6 +254,7 @@ def compute_yearly_on_stats(array=None, y0=None, y1=None, n=3):
     print(f'cells (0->1) from {y0}->{y1} {nn_dict} :: {sum(counts) } (total)')
 
 
+
 def compute_temp_autocorr(array=None):
     years = array.dtype.names
     indices = None
@@ -186,7 +265,7 @@ def compute_temp_autocorr(array=None):
             indices = year_el_ind
         else:
             indices = np.intersect1d(indices, year_el_ind)
-
+    print(array.shape, array.size, indices.size)
     ts = array.flat[indices]
     print(ts[:5])
 
@@ -196,6 +275,7 @@ def compute_spatial_autocorr(array=None):
     y0s = years[:-1]
     y1s = years[1:]
     for y0, y1 in zip(y0s, y1s):
+
         y0arr = array[y0]
         y1arr = array[y1]
         #Compute the spatial correlation using FFT

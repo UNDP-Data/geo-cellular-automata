@@ -3,6 +3,7 @@ import numpy as np
 import os
 import pandas as pd
 import xarray as xr
+import rasterio
 def read_xarray(src_folder=None):
     names = [e for e in os.listdir(src_folder) if e.endswith('.tif')]
     paths = [os.path.join(src_folder, e) for e in names]
@@ -54,3 +55,33 @@ def read_all_data(src_folder=None):
         ds = None
 
     return data
+
+def read_rio(src_folder=None):
+    names = [e for e in os.listdir(src_folder) if e.endswith('.tif')]
+    names.sort()
+    years = [os.path.splitext(name)[0].split('_')[2] for name in names]
+    data = None
+    profile = None
+    for i, fname in enumerate(names):
+        year = years[i]
+        fpath = os.path.join(src_folder, fname)
+
+        with rasterio.open(fpath, 'r') as src:
+            for i in range(1, src.count + 1):
+
+                # read image into ndarray
+                    yearly_data = src.read().squeeze()
+                    if profile is None:
+                        profile = src.profile
+
+                    shape = src.shape
+                    dtype = src.dtypes[i-1]
+                    yearly_data[np.isclose(yearly_data, src.nodata)] = np.nan
+                    if data is None:
+                        ddtype = np.dtype([(year, dtype) for year in years])
+                        data = np.empty(shape=shape, dtype=ddtype)
+                        profile['bounds']=src.bounds
+
+                    data[year] = yearly_data
+
+    return data, profile

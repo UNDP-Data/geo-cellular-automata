@@ -1,17 +1,12 @@
-import time
 
-import rasterio.coords
 from skimage import util
-import matplotlib.pyplot as plt
 import numpy as np
-import functools
 import itertools
-import operator
-import pandas as pd
-from scipy.signal import correlate2d, fftconvolve, oaconvolve
-from scipy.ndimage import generic_filter
-from scipy import stats as st
+from scipy.signal import fftconvolve
 from affine import  Affine
+
+
+
 def gen_offsets(n=None):
     assert n%2==1, f'n={n} is not odd'
     middle = n//2
@@ -127,7 +122,35 @@ def compute_diff(array=None):
         a[n] = array[sy]-array[ey]
     return a
 
-def aggregate(binary_rec_array=None, block_size=None):
+def aggregate(binary_rec_array=None, block_size=None, th=.8):
+    years = binary_rec_array.dtype.names
+
+    ndtype = [(e, 'u2') for e in years]
+
+    nl, nc = binary_rec_array.shape
+    lmod = nl%block_size
+    cmod = nc%block_size
+    data = np.empty(shape=(nl//block_size, nc//block_size), dtype=ndtype)
+
+    for year in years:
+        ydata = binary_rec_array[year][0:nl-lmod, 0:nc-cmod]
+        #bw = util.view_as_blocks(arr_in=np.where(ydata==-1,np.nan,ydata),block_shape=(block_size,block_size))
+        bw = util.view_as_blocks(arr_in=np.where(ydata==-1,0,ydata),block_shape=(block_size,block_size))
+        nozero = np.where(ydata==0,1,ydata)
+        nozero = np.where(nozero==-1, 0, nozero)
+
+        bw1 = util.view_as_blocks(arr_in=nozero,block_shape=(block_size,block_size))
+        bsum_all = bw1.sum(axis=-1).sum(axis=-1)
+        bsum_all = bsum_all / 4
+        bsum = bw.sum(axis=-1).sum(axis=-1)
+        bs = bsum/bsum_all
+
+        data[year] = np.where(bs>th,1,0)
+        #data[year] = bsum_all
+        #data[year] = np.where(np.nanmean(np.nanmean(bw, axis=-1), axis=-1) > .8, 1, 0)
+    return data
+
+def aggregate1(binary_rec_array=None, block_size=None):
     years = binary_rec_array.dtype.names
 
     ndtype = [(e, 'u1') for e in years]
@@ -139,10 +162,10 @@ def aggregate(binary_rec_array=None, block_size=None):
 
     for year in years:
         ydata = binary_rec_array[year][0:nl-lmod, 0:nc-cmod]
-        bw = util.view_as_blocks(arr_in=np.where(ydata==1,1,0),block_shape=(block_size,block_size))
+        bw = util.view_as_blocks(arr_in=np.where(ydata==-1,np.nan,ydata),block_shape=(block_size,block_size))
         #bw = util.view_as_blocks(arr_in=np.where(ydata==-1,0,ydata),block_shape=(block_size,block_size))
         #data[year] = np.where(bw.sum(axis=-1).sum(axis=-1)>=1,1,0)
-        data[year] = bw.sum(axis=-1).sum(axis=-1)
+        data[year] = np.where(np.nanmean(np.nanmean(bw, axis=-1), axis=-1) > .8, 1, 0)
     return data
 
 def get_tranform_and_bounds(profile=None, array_shape=None ):
@@ -200,6 +223,35 @@ def compute_bsum(rec_array=None,n=None):
         a = rec_array[name]
         data[name] = fftconvolve(np.where(np.isnan(a), 0, a), np.ones((n,n), dtype='u1'), mode='same')
     return data
+
+def compute_off_stats(binary_array=None, y0=None, y1=None, n=None):
+    t0 = binary_array[y0]
+    t1 = binary_array[y1]
+    offset = n//2
+    nl, nc = binary_array.shape
+    ysize= nl-2*offset
+    xsize = nc-2*offset
+    t0_win = np.lib.stride_tricks.sliding_window_view(t0,window_shape=(ysize, xsize))
+    t1_win = np.lib.stride_tricks.sliding_window_view(t1,window_shape=(ysize, xsize))
+    t01_win = np.lib.stride_tricks.sliding_window_view(np.where(t1==1, 1, 0),window_shape=(ysize, xsize))
+    t0_center = t0_win[offset,offset,...].ravel()
+    t1_center = t1_win[offset,offset,...].ravel()
+    t1_el_ind = np.argwhere(t1_center == 1).ravel()
+    t0_noel_ind = np.argwhere(t0_center == 0).ravel()
+    on_indices = np.intersect1d(t0_noel_ind, t1_el_ind)
+
+
+    a = t01_win.sum(axis=0).sum(axis=0)
+    b = a.flat[on_indices]
+
+    uv, counts = np.unique(b, return_counts=True)
+
+    percs = counts/sum(counts) *100
+
+    # percs_str = [f'{e:.2f}%' for e in percs]
+    # nn_dict = dict(zip(uv, percs_str))
+    #print(f'cells (0->1) from {y0}->{y1} {nn_dictm} :: {sum(countsm) } (total)')
+    return uv, percs, counts
 
 def compute_on_stats(binary_array=None, y0=None, y1=None, n=None):
     t0 = binary_array[y0]

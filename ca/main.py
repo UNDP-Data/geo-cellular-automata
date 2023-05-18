@@ -17,11 +17,12 @@ import cartopy.crs as ccrs
 import pickle
 import cartopy.io.img_tiles as cimgt
 import ca
-from matplotlib.widgets import CheckButtons, Button
+from matplotlib.widgets import CheckButtons, Button, RadioButtons
 import cartopy
 import math
 import matplotlib.patches as mpatches
 from cartopy import mpl as cmpl
+
 
 def display(data=dict(), interpolation='nearest', title='', cmap='Paired'):
     """
@@ -56,7 +57,31 @@ def display(data=dict(), interpolation='nearest', title='', cmap='Paired'):
     fig.suptitle(title)
     plt.show()
 
+def animate(source_pattern, outfile, delay=100, compression=20):
 
+    import glob
+    import subprocess
+    from subprocess import Popen, PIPE
+
+    fmt = outfile.split('.')[-1]
+
+    if fmt == 'gif':
+        cmd = ['convert', '-loop', '50', '-dither', 'None', '-colors', '256', '-delay', str(delay/10), source_pattern, outfile]
+    elif fmt == 'mp4':
+        fps = 1000 / delay
+        cmd = ['ffmpeg', '-r', str(fps), '-pattern_type', 'glob', '-i', source_pattern, '-c:v', 'libx264',
+               '-crf', str(compression), '-pix_fmt', 'yuv420p', '-y', outfile]
+    else:
+        raise ValueError('Unsupported animation format. Select "gif" or "mp4.')
+
+    result = subprocess.call(cmd, stderr=subprocess.STDOUT)
+
+    #remove original files
+    for tmpfilename in glob.glob(source_pattern):
+        os.remove(tmpfilename)
+
+    print('Conversion result: {}'.format(result))
+    return result
 def display_rarray(data=None, ncols=3, interpolation='nearest', title='', mask_val=None, cmap='gist_rainbow'):
     """
         Displays one or more arrays with legend.
@@ -98,6 +123,7 @@ def display_rarray(data=None, ncols=3, interpolation='nearest', title='', mask_v
     # plt.tight_layout()
     fig.suptitle(title)
     plt.show()
+
 
 # def geo_plot(arrays=None, style='map', interpolation='nearest',
 #              title='', mask_val=None, cmap='gist_rainbow',
@@ -265,55 +291,35 @@ def display_rarray(data=None, ncols=3, interpolation='nearest', title='', mask_v
 #
 #     plt.show()
 
-def geo_plot(arrays=None, style='map', interpolation='nearest',
+def geo_plot(arrays=None, interpolation='nearest',
              title='', mask_val=None, cmap='gist_rainbow',
-             arrays_bounds: Dict[str,rasterio.coords.BoundingBox] = None,
-
-
+             arrays_bounds: Dict[str, rasterio.coords.BoundingBox] = None,
+             style_name = 'map'
              ):
     current_index = 0
-    layer_names = tuple(arrays.keys())
-    print(layer_names)
-    state = {'current_layer_name':layer_names[0]}
-    #current_layer_name = layer_names[0]
-    #status = dict([(e, False) for e in layer_names])
+    layer_names = list(arrays.keys())
+
+    state = {'current_layer_name': layer_names[0]}
     status = [False for e in layer_names]
     status[0] = True
     current_bounds = arrays_bounds[state['current_layer_name']]
-    #dts = dict([(k, v.dtype[0])  for k, v in arrays.items()])
     names = arrays[state['current_layer_name']].dtype.names
-    #data = dict([(k, v.view((dts[k], len(v.dtype)))) for k, v in arrays.items()])
+    style_names = ['map', 'satellite']
 
-
-    def hinit():
-        current_bounds = arrays_bounds[state['current_layer_name']]
-        current_layer_extent = [current_bounds.left, current_bounds.right, current_bounds.bottom, current_bounds.top]
-        #ax.set_extent(current_layer_extent)  # set extents
-        callback.update()
-
-
+    styles = dict(zip(style_names, (cimgt.OSM(), cimgt.QuadtreeTiles())))
+    style = styles[style_name]
 
     gl = None
 
-
-
-    if style == 'map':
-        img = cimgt.OSM()  # spoofed, downloaded street map
-    elif style == 'satellite':
-        # SATELLITE STYLE
-        img = cimgt.QuadtreeTiles()  # spoofed, downloaded street map
-    else:
-        raise Exception('no valid style')
     fig = plt.figure(figsize=(10, 10))  # open matplotlib figure
 
     ax = plt.axes(projection=ccrs.GOOGLE_MERCATOR)  # project using coordinate reference system (CRS) of street map
 
-    #map_extent = [map_bounds.left, map_bounds.right, map_bounds.bottom, map_bounds.top]
-
+    # map_extent = [map_bounds.left, map_bounds.right, map_bounds.bottom, map_bounds.top]
 
     current_layer_extent = [current_bounds.left, current_bounds.right, current_bounds.bottom, current_bounds.top]
     ax.set_extent(current_layer_extent)  # set extents
-    ax.add_image(img, 12, zorder=2)  # add OSM with zoom specification
+    ax.add_image(style, 12, zorder=2)  # add OSM with zoom specification
 
     # [top_left[0], bot_right[0], bot_right[1], top_left[1]]
     arr = arrays[state['current_layer_name']][names[current_index]]
@@ -324,10 +330,12 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
                    cmap=cmap,
                    interpolation=interpolation,
                    zorder=5,
-                   origin='upper'
+                   origin='upper',
+
 
                    )
     gl = ax.gridlines(draw_labels=True, linewidth=1, color='red', linestyle='-')
+
     # Declare and register callbacks
     def on_zoom(event_ax):
         xmin, xmax = event_ax.get_xlim()
@@ -336,7 +344,6 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
         if zl < 20:
             event_ax.img_factories[0][1] = (zl,)
             event_ax._done_img_factory = False
-
 
     def get_fig_size_cm(ax):
         bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
@@ -370,7 +377,7 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
         map_width = xmax - xmin
 
         scale = map_width / px_width
-        #gl = ax.gridlines(draw_labels=True, linewidth=1, color='red', linestyle='-')
+        # gl = ax.gridlines(draw_labels=True, linewidth=1, color='red', linestyle='-')
         nonlocal gl
 
         if gl is not None:
@@ -378,10 +385,7 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
                 [a.remove() for a in artist_coll]
             ax._gridliners = []
 
-
         gl = ax.gridlines(draw_labels=True, linewidth=1, color='red', linestyle='-')
-
-
         return abs(scale_to_zoom(scale))
 
     class Index:
@@ -392,7 +396,7 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
 
         def update(self):
             try:
-                arr = arrays[state['current_layer_name']][names[self.current_index]][::-1,:]
+                arr = arrays[state['current_layer_name']][names[self.current_index]][::-1, :]
                 im.set_array(arr)
                 im.set_data(arr)
                 im.set_clim(vmin=arr.min(), vmax=arr.max())
@@ -411,7 +415,6 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
                 # fig.suptitle(f'{names[self.current_index]}')
                 fig.canvas.draw_idle()
 
-
         # Define functions to update the plot when the buttons are clicked
         def update_previous(self, event):
 
@@ -419,20 +422,20 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
                 self.current_index -= 1
                 self.update()
 
-
         def update_next(self, event):
-
+            fig.savefig(f'/tmp/vis_cartopy_frame_{names[self.current_index]}.png', dpi=100)
             if self.current_index < len(names) - 1:
+
                 self.current_index += 1
                 self.update()
 
+            if self.current_index == len(names) -1:
+                res = animate('/tmp/vis_cartopy_frame_*.png', outfile='/home/janf/Documents/ibm/hrea_block_anim.gif', delay=800, compression=10)
 
     def checkbox_update(label):
-
         index = layer_names.index(label)
         new_status = not status[index]
         status[index] = new_status  # Toggle the checkbox status
-        print(status)
         if new_status is False:
             off = any(status)
             im.set_visible(off)
@@ -445,16 +448,35 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
             if im.get_visible() is False:
                 im.set_visible(new_status)
 
-        # print(f"Changed layer name to {state['current_layer_name']} ")
         callback.update()
 
+    def set_bg_layer(label):
+
+        style_name = label
+        style = styles[style_name]
+
+        ax.img_factories[0][0] = style
+        ax._done_img_factory = False
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+
     # Create two subplots for the buttons
-    fig.subplots_adjust(bottom=0.2, right=.7)
-    ax_prev = plt.axes([0.45, 0.05, 0.1, 0.075])
-    ax_next = plt.axes([0.55, 0.05, 0.1, 0.075])
-    ax_check = plt.axes([0.75, 0.8, 0.1, 0.075], frameon=True)
+    #fig.subplots_adjust(bottom=0.2, right=.7)
+    #fig.subplots_adjust(bottom=0.2)
+
+    ax_prev = plt.axes([0.4, 0.05, 0.1, 0.075])
+    ax_next = plt.axes([0.5, 0.05, 0.1, 0.075])
+    ax_check = plt.axes([0.6, 0.05, 0.2, 0.075], frameon=True)
+    ax_bg = plt.axes([0.2, 0.05, 0.2, 0.075], frameon=True, )
+
     checkboxes = CheckButtons(ax_check, layer_names, status)
     checkboxes.on_clicked(checkbox_update)
+
+    radio_bg = RadioButtons(ax_bg, style_names, active=style_names.index(style_name))
+    radio_bg.on_clicked(set_bg_layer)
+    # for circle in radio_bg.circles: # adjust radius here. The default is 0.05
+    #     circle.set_radius(0.05)
     # Add the buttons to the subplots
     button_previous = Button(ax_prev, 'Previous')
     button_next = Button(ax_next, 'Next')
@@ -467,15 +489,15 @@ def geo_plot(arrays=None, style='map', interpolation='nearest',
 
     ax.callbacks.connect('xlim_changed', on_zoom)
     # ax.coastlines(resolution='110m')
-    ax.add_feature(cartopy.feature.BORDERS, linestyle=':', linecolor='red')
-    # ax.add_feature(cartopy.feature.LAKES.with_scale('110m'))
+    # ax.add_feature(cartopy.feature.BORDERS, linestyle=':', linecolor='red')
+    #ax.add_feature(cartopy.feature.LAKES.with_scale('110m'), zorder=10)
 
     # xticks = np.arange(xmin, xmax, 10000)
     # yticks = np.arange(ymin, ymax, 10000)
     # ax.set_xticks(xticks, crs=ccrs.GOOGLE_MERCATOR)
     # ax.set_yticks(yticks, crs=ccrs.GOOGLE_MERCATOR)
     # gl = ax.gridlines(draw_labels=True, linewidth=1, color='red', linestyle='-')
-    fig.subplots_adjust(bottom=0.2)
+    #fig.subplots_adjust(bottom=0.2)
 
     # plt.colorbar(im, ax=ax, orientation='horizontal')
     labels, handles = zip(*[(k, mpatches.Rectangle((0, 0), 1, 1, facecolor=v)) for k, v in cmp.labels.items()])
@@ -615,7 +637,7 @@ def plot_neigh_bars(hrea_array=None, binary_hrea_array=None, ):
     df = pandas.DataFrame(columns=['nneigh', 'perc', 'years'])
     ci = 0
     for y0, y1 in zip(y0s, y1s):
-        neigh, percs, counts = model.compute_on_stats(binary_array=binary_hrea_array, y0=y0, y1=y1, n=3)
+        neigh, percs, counts = model.compute_off_stats(binary_array=binary_hrea_array, y0=y0, y1=y1, n=3)
 
         print(y0, y1, neigh, percs)
 
@@ -651,8 +673,9 @@ def plot_neigh_bars(hrea_array=None, binary_hrea_array=None, ):
         ax.bar_label(c, labels=labels, label_type='center')
 
     handles, labels = ax.get_legend_handles_labels()
+    plt.subplots_adjust(right=.7)
     labels_new = [f"{label.strip('()').split(',')[1]} neigh" for label in labels]
-    plt.legend(handles, labels_new)
+    plt.legend(handles, labels_new, bbox_to_anchor=(1.2, 0.5), loc='center')
 
     # Reverse colors and text labels to display the last value at the top.
     colors = colors[::-1]
@@ -674,7 +697,7 @@ def plot_neigh_bars(hrea_array=None, binary_hrea_array=None, ):
     # plt.xticks([])
     # plt.xlabel(years)
     # plt.xlabel('No neighs')
-    plt.title('The percentage of block turned on grouped by number of neighbours in previous time step')
+    plt.title('The percentage of block turned on grouped by number of neighbours in next time step')
 
     plt.show()
 
@@ -700,7 +723,7 @@ if __name__ == '__main__':
 
 
     else:
-        #os.remove(hrea_array_path)
+        # os.remove(hrea_array_path)
         print('reading')
         hrea = np.load(hrea_array_path)
 
@@ -712,28 +735,32 @@ if __name__ == '__main__':
     binary = model.apply_threhold(hrea)
 
     # ploti(rec_array=binary, mask_val=-1, cmap='gray_r')
-    onekm_agg = model.aggregate(binary_rec_array=binary, block_size=29)
-    transform, bounds = model.get_tranform_and_bounds(profile=profile, array_shape=onekm_agg.shape)
+    onekm_agg_80 = model.aggregate(binary_rec_array=binary, block_size=29, th=.8)
+    onekm_agg_50 = model.aggregate(binary_rec_array=binary, block_size=29, th=.5)
+    transform, bounds = model.get_tranform_and_bounds(profile=profile, array_shape=onekm_agg_80.shape)
 
-    # plot_neigh_bars(hrea_array=hrea, binary_hrea_array=onekm_agg,)
+    #plot_neigh_bars(hrea_array=hrea, binary_hrea_array=onekm_agg_50,)
+    #exit()
     # plot_semivariogran(array=binary)
     # model.compute_temp_autocorr(array=hrea)
     data = model.compute_bsum(rec_array=hrea, n=99)
 
     col_dict = {
-                -1: "#FFFFFF00",
-                #-1: "red",
-                0: "black",
-                1: "orange"
-                }
+        -1: "#FFFFFF00",
+        # -1: "red",
+        0: "black",
+        1: "orange"
+    }
 
-    #ploti(rec_array=onekm_agg)
+    # ploti(rec_array=onekm_agg)
     # We create a colormar from our list of colors
     cmp = ListedColormap([col_dict[x] for x in col_dict.keys()])
     cmp.labels = {'no electricity': 'black', 'electrified': 'orange'}
-    arrays={'binary':binary, 'block':onekm_agg}
-    arrays_bounds = {'binary':profile['bounds'], 'block':bounds}
-    geo_plot(arrays=arrays, arrays_bounds=arrays_bounds, cmap=cmp, style='satellite')
+
+    arrays = {'binary': binary, '1km_sum_80perc': onekm_agg_80, '1km_sum_50perc': onekm_agg_50}
+
+    arrays_bounds = {'binary': profile['bounds'], '1km_sum_80perc': bounds, '1km_sum_50perc': bounds}
+    geo_plot(arrays=arrays, arrays_bounds=arrays_bounds, cmap=cmp)
 
 
     def mark():

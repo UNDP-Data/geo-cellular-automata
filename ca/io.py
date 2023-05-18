@@ -22,7 +22,7 @@ def read_xarray(src_folder=None):
                              chunks={'band':'auto'}
 
     )
-    #for path in paths:
+
 
 
     return data

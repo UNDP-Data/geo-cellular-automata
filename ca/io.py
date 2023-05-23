@@ -4,16 +4,14 @@ import os
 import pandas as pd
 import xarray as xr
 import rasterio
+
+
 def read_xarray(src_folder=None):
+    """ read sample HREA cogs using xarray"""
     names = [e for e in os.listdir(src_folder) if e.endswith('.tif')]
     paths = [os.path.join(src_folder, e) for e in names]
-    years = [os.path.splitext(name)[0].split('_')[2] for name in names]
-    td = pd.to_datetime(years, format='%Y')
-    time_var = xr.Variable('time', td)
-    print(td)
-    datasets = []
 
-    data = xr.open_mfdataset(paths=paths,
+    return xr.open_mfdataset(paths=paths,
                              engine='rasterio',
                              combine='nested',
                              concat_dim='time',
@@ -22,10 +20,6 @@ def read_xarray(src_folder=None):
                              chunks={'band':'auto'}
 
     )
-
-
-
-    return data
 
 def read_all_data(src_folder=None):
     names = [e for e in os.listdir(src_folder) if e.endswith('.tif')]

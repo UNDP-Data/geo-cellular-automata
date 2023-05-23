@@ -60,7 +60,7 @@ if __name__ == '__main__':
                         help='A sample location to download data for',
                         type=str,choices=SAMPLE_LOCATIONS,  default=SAMPLE_LOCATIONS, nargs='+')
     parser.add_argument('-f', '--folder-to',
-                        help='FUll apbsolute path to the folder where the data will be downloaded',
+                        help='Full absolute path to the folder where the data will be downloaded',
                         type=str, required=True )
 
     hrea_sas = os.environ.get('HREA_SAMPLE_DATA_SAS', None)

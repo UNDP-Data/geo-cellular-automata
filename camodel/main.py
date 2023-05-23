@@ -45,7 +45,7 @@ def main(sample_hrea_folder=None):
         profile=profile
     )
 
-    plot_tools.plot_neigh_bars(binary_hrea_array=onekm_agg_50perc, target_year='last')
+    #plot_tools.plot_neigh_bars(binary_hrea_array=onekm_agg_50perc, target_year='last')
 
     colors_dict = {
         -1: "#FFFFFF00",

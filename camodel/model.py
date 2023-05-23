@@ -1,7 +1,6 @@
 import numpy as np
 import logging
 from skimage import util as skutil
-import itertools
 from scipy.signal import fftconvolve
 from affine import Affine
 
@@ -22,7 +21,7 @@ def apply_threhold(hrea_struct_array=None, threshold=.8, nan_value=-1) -> np.nda
     for year in dtype.names:
         a = hrea_struct_array[year]
         valid = ~np.isnan(a)
-        data[year][~valid] = -1
+        data[year][~valid] = nan_value
         data[year][valid] = np.where(hrea_struct_array[year][valid] > threshold, 1, 0)
     return data
 

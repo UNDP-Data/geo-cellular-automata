@@ -1,5 +1,5 @@
 #!/bin/bash
-AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=undpngddlsgeohubdev01;AccountKey=r1XiTbCtrorE63XfmclS9YihGCPicHWqKIL1BWe2CdeWoSNvif2OXgSyGcIw4BjaGiwkjvZTQGcYNIXCmjvwFA==;EndpointSuffix=core.windows.net"
+AZURE_STORAGE_CONNECTION_STRING=""
 
 
 

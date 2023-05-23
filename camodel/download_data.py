@@ -63,14 +63,14 @@ if __name__ == '__main__':
                         help='Full absolute path to the folder where the data will be downloaded',
                         type=str, required=True )
 
-    hrea_sas = os.environ.get('HREA_SAMPLE_DATA_SAS', None)
-    if hrea_sas is None:
-        raise Exception(f'Environment variable "HREA_SAMPLE_DATA_SAS" is not defined')
+
     args = parser.parse_args(args=None if sys.argv[1:] else ['--help'])
     location = args.sample_location
 
     dst_folder = args.folder_to
-
+    hrea_sas = os.environ.get('HREA_SAMPLE_DATA_SAS', None)
+    if hrea_sas is None:
+        raise Exception(f'Environment variable "HREA_SAMPLE_DATA_SAS" is not defined')
     try:
         location[0]
         for l in location:

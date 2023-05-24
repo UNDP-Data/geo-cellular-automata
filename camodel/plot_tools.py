@@ -228,14 +228,14 @@ def geo_plot(arrays=None, interpolation='nearest',
                 self.update()
 
         def update_next(self, event):
-            fig.savefig(f'/tmp/vis_cartopy_frame_{names[self.current_index]}.png', dpi=100)
+            #fig.savefig(f'/tmp/vis_cartopy_frame_{names[self.current_index]}.png', dpi=100)
             if self.current_index < len(names) - 1:
 
                 self.current_index += 1
                 self.update()
 
-            if self.current_index == len(names) -1:
-                res = animate('/tmp/vis_cartopy_frame_*.png', outfile='/home/janf/Documents/ibm/hrea_block_anim.gif', delay=800, compression=10)
+            # if self.current_index == len(names) -1:
+            #     res = animate('/tmp/vis_cartopy_frame_*.png', outfile='/home/janf/Documents/ibm/hrea_block_anim.gif', delay=800, compression=10)
 
     def checkbox_update(label):
         index = layer_names.index(label)

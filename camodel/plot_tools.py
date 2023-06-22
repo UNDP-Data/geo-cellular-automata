@@ -1,3 +1,4 @@
+import numpy as np
 from matplotlib import pyplot as plt
 import os
 import pandas as pd
@@ -9,7 +10,7 @@ import cartopy.io.img_tiles as cimgt
 from matplotlib.widgets import CheckButtons, Button, RadioButtons
 import math
 import matplotlib.patches as mpatches
-
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def animate(source_pattern, outfile, delay=100, compression=20):
 
@@ -93,7 +94,7 @@ def plot_neigh_bars(binary_hrea_array=None, target_year='first'):
     plt.show()
 
 
-def geo_plot(arrays=None, interpolation='nearest',
+def geo_plot(arrays=Dict[str, np.ndarray], interpolation='nearest',
             mask_val=None, cmap='gist_rainbow',
              arrays_bounds: Dict[str, rasterio.coords.BoundingBox] = None,
              style_name = 'map',
@@ -270,10 +271,10 @@ def geo_plot(arrays=None, interpolation='nearest',
     #fig.subplots_adjust(bottom=0.2, right=.7)
     #fig.subplots_adjust(bottom=0.2)
 
-    ax_prev = plt.axes([0.4, 0.05, 0.1, 0.075])
-    ax_next = plt.axes([0.5, 0.05, 0.1, 0.075])
-    ax_check = plt.axes([0.6, 0.05, 0.2, 0.075], frameon=True)
-    ax_bg = plt.axes([0.2, 0.05, 0.2, 0.075], frameon=True, )
+    ax_prev = plt.axes([0.4, 0.01, 0.1, 0.075])
+    ax_next = plt.axes([0.5, 0.01, 0.1, 0.075])
+    ax_check = plt.axes([0.6, 0.01, 0.2, 0.075], frameon=True)
+    ax_bg = plt.axes([0.2, 0.01, 0.2, 0.075], frameon=True, )
 
     checkboxes = CheckButtons(ax_check, layer_names, status)
     checkboxes.on_clicked(checkbox_update)
@@ -296,8 +297,10 @@ def geo_plot(arrays=None, interpolation='nearest',
     # ax.coastlines(resolution='110m')
     # ax.add_feature(cartopy.feature.BORDERS, linestyle=':', linecolor='red')
     #ax.add_feature(cartopy.feature.LAKES.with_scale('110m'), zorder=10)
-
-    labels, handles = zip(*[(k, mpatches.Rectangle((0, 0), 1, 1, facecolor=v)) for k, v in cmap.labels.items()])
-    ax.legend(handles, labels, loc=4, framealpha=1)
-
+    if hasattr(cmap, 'labels'):
+        labels, handles = zip(*[(k, mpatches.Rectangle((0, 0), 1, 1, facecolor=v)) for k, v in cmap.labels.items()])
+        ax.legend(handles, labels, loc=4, framealpha=1)
+    else:
+        cb = plt.colorbar(im,ax=ax, orientation='horizontal', location='top', fraction=0.046, pad=0.04)
+        #ax.set_aspect('auto', adjustable=None)
     plt.show()

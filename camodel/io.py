@@ -3,7 +3,7 @@ import numpy as np
 import os
 import xarray as xr
 import rasterio
-
+from rasterio.enums import Resampling
 
 def read_xarray(src_folder:str=None) -> xr.Dataset:
     """
@@ -25,7 +25,13 @@ def read_xarray(src_folder:str=None) -> xr.Dataset:
 
     )
 
-def read_rio(src_folder=None) -> np.ndarray:
+def read(src_path=None, band=1):
+    with rasterio.open(src_path) as src:
+        return src.read(band)
+
+
+
+def read_rio(src_folder=None, filter_string=None) -> np.ndarray:
     """
     Read HREA cogs using rasterio from the src folder into a structured array
     :param src_folder: str, path to the folder folding the layers
@@ -35,7 +41,7 @@ def read_rio(src_folder=None) -> np.ndarray:
     The  original nodata value is replaced with nan's
 
     """
-    names = [e for e in os.listdir(src_folder) if e.endswith('.tif')]
+    names = [e for e in os.listdir(src_folder) if filter_string in e]
     names.sort()
     years = [os.path.splitext(name)[0].split('_')[2] for name in names]
     data = None
@@ -62,3 +68,57 @@ def read_rio(src_folder=None) -> np.ndarray:
                 data[year] = yearly_data
 
     return data, profile
+
+
+def toGDAL(struct_array=None,
+           path=None,
+           dtype=None,
+           nodata=None,
+           transform=None,
+           epsg=4326,
+           compress='zstd',
+           tiled=True,
+           blockxsize=256,
+           blockysize=256,
+           overviews=None
+
+           ):
+
+    height, width = struct_array.shape
+
+
+    if struct_array.dtype.names:
+        count = len(struct_array.dtype.names)
+    else:
+        count = 1
+    with rasterio.Env():
+
+        # And then change the band count to 1, set the
+        # dtype to uint8, and specify LZW compression.
+        nprofile = dict(
+            count=count,
+            driver='GTiff',
+            dtype=dtype,
+            nodata=nodata,
+            width=width,
+            height=height,
+            transform=transform,
+            crs=rasterio.crs.CRS.from_epsg(epsg),
+            compress=compress,
+            tiled=tiled,
+            blockxsize=blockxsize,
+            blockysize=blockysize,
+
+        )
+        band = 1
+        with rasterio.open(path, 'w', **nprofile) as dst:
+            if struct_array.dtype.names:
+                for name in struct_array.dtype.names:
+                    arr = struct_array[name]
+                    dst.write(arr, band)
+                    # if overviews:
+                    #     dst.build_overviews(overviews, Resampling.nearest)
+                    #     dst.update_tags(ns='rio_overview', resampling='nearest')
+                    band+=1
+            else:
+                dst.write(struct_array, band)

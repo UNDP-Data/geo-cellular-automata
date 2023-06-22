@@ -40,6 +40,8 @@ def get_tranform_and_bounds(profile=None, array_shape=None ):
     yblock_size = nl // array_shape[0]
     xblock_size = nc // array_shape[1]
 
+
+
     tlx, xres, xrot, tly, yrot, yres  = src_transform.to_gdal()
     new_xres = xblock_size*xres
     new_yres = yblock_size*yres
@@ -49,6 +51,9 @@ def get_tranform_and_bounds(profile=None, array_shape=None ):
     right, bottom = new_transform * array_shape[::-1]
     new_bounds = profile['bounds'].__class__(left, bottom, right, top)
     return new_transform, new_bounds
+
+
+
 
 def aggregate(binary_hrea_array=None, block_size=None, threshold=.8, profile=None):
     """
@@ -148,18 +153,61 @@ def compute_neighbour_stats(binary_array=None, y0=None, y1=None,  target_year=No
     return uv-1, percs, counts
 
 
-
-def compute_block_sum(binary_hrea_array=None,block_size=None):
+def focal_mean(binary_hrea_array=None, window_size=None):
     """
-    Fast Fourier based block sum
+    Fast Fourier based focal mean
     :param binary_hrea_array:
-    :param blick_size:
+    :param window_size:
     :return:
     """
     dtype = binary_hrea_array.dtype
-    ndtype = [(e, 'i2') for e in dtype.names]
+    ndtype = [(e, 'f4') for e in dtype.names]
     data = np.empty(shape=binary_hrea_array.shape, dtype=ndtype)
     for name in dtype.names:
         a = binary_hrea_array[name]
-        data[name] = fftconvolve(np.where(np.isnan(a), 0, a), np.ones((block_size,block_size), dtype='u1'), mode='same')
+        n = fftconvolve(np.where(np.isnan(a), 0, 1), np.ones((window_size, window_size), dtype='u1'), mode='same')
+        data[name] = fftconvolve(np.where(np.isnan(a), 0, a), np.ones((window_size, window_size), dtype='u1'), mode='same') / n
+
     return data
+
+
+def focal_sum(binary_hrea_array=None, window_size=None):
+    """
+    Fast Fourier based  focal sum
+    :param binary_hrea_array:
+    :param window_size:
+    :return:
+    """
+    dtype = binary_hrea_array.dtype
+    ndtype = [(e, 'f2') for e in dtype.names]
+    data = np.empty(shape=binary_hrea_array.shape, dtype=ndtype)
+    for name in dtype.names:
+        a = binary_hrea_array[name]
+        data[name] = fftconvolve(np.where(np.isnan(a), 0, a), np.ones((window_size, window_size), dtype='u1'), mode='same')
+
+    return data
+
+
+
+def block_mean(array_in=None, block_size=None, profile=None ):
+
+
+    print(array_in.shape, np.array(array_in.shape)%block_size)
+    nl, nc = array_in.shape
+    lmod = nl%block_size
+    cmod = nc%block_size
+    nl-=lmod
+    nc-=cmod
+    a = array_in[:nl, :nc]
+    print(nl, nc, a.shape, np.array(a.shape)%block_size)
+    n = skutil.view_as_blocks(arr_in=np.where(np.isnan(a), 0, 1),block_shape=(block_size,block_size))
+    bw = skutil.view_as_blocks(arr_in=np.where(np.isnan(a), 0, a),block_shape=(block_size,block_size))
+    bsum = bw.sum(axis=-1).sum(axis=-1)
+    nsum = n.sum(axis=-1).sum(axis=-1)
+    transform, bounds = get_tranform_and_bounds(profile=profile, array_shape=bsum.shape)
+    bmean = bsum/nsum
+    return  bmean, transform, bounds
+
+
+
+

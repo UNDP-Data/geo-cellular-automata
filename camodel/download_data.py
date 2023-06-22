@@ -1,7 +1,6 @@
 import os
 import asyncio
 from azure.storage.blob.aio import ContainerClient
-import math
 import logging
 logger = logging.getLogger(__name__)
 SAMPLE_LOCATIONS = 'Mangochi', 'Antsiranana', 'Kisumu', 'Apurimac'
